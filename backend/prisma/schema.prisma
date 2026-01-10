@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductStatus {
+  TEST
+  CONTINUE
+  STOP
+  REVISIT
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  workspaceId String
+  status      ProductStatus @default(TEST)
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  videos    Video[]
+
+  // 🔽 THÊM DÒNG NÀY
+  dailyActions DailyAction[]
+
+  @@index([workspaceId])
+}
+
+model Video {
+  id        String @id @default(uuid())
+  productId String
+  views     Int    @default(0)
+  clicks    Int    @default(0)
+
+  renderStatus String  @default("PROCESSING") // 👈 THÊM
+  outputPath   String? // 👈 THÊM
+
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+}
+
+model Workspace {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  products Product[]
+}
+
+model RuleConfig {
+  id          String @id @default(uuid())
+  workspaceId String
+  key         String
+  value       Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId])
+}
+
+model DailyAction {
+  id          String @id @default(uuid())
+  workspaceId String
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  actionType DailyActionType
+  priority   Int
+  reason     String
+  metadata   Json?
+
+  actionDate DateTime @db.Timestamptz
+
+  isDone    Boolean   @default(false)
+  doneAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+enum DailyActionType {
+  MAKE_MORE_VIDEOS
+  SCALE_FORMAT
+  STOP_PRODUCT
+  RETEST_WITH_NEW_FORMAT
+}
+
+model DailyActionRun {
+  id           String @id @default(uuid())
+  workspace_id String
+  run_date     String // YYYY-MM-DD
+
+  status        String // RUNNING | DONE | FAILED
+  started_at    DateTime
+  finished_at   DateTime?
+  error_message String?
+
+  @@unique([workspace_id, run_date])
+}
+
+enum VideoType {
+  SELL
+  BUILD
+}
+
+enum RenderStatus {
+  PENDING
+  DONE
+  FAIL
+}
+
+model VideoProject {
+  id String @id @default(cuid())
+
+  productId String // ⭐ DÒNG QUYẾT ĐỊNH
+
+  type     VideoType
+  formatId String?
+
+  inputMedia Json
+  visionData Json?
+  scriptData Json?
+  voicePath  String?
+  caption    String?
+
+  renderStatus RenderStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+}
+
+model PostSchedule {
+  id          String  @id @default(uuid())
+  workspaceId String
+  videoId     String
+  productId   String?
+
+  platform    String
+  scheduledAt DateTime @db.Timestamptz
+  timezone    String
+
+  status     String
+  retryCount Int    @default(0)
+  maxRetry   Int    @default(3)
+
+  resultMessage String?
+  createdAt     DateTime @default(now()) @db.Timestamptz
+  updatedAt     DateTime @updatedAt @db.Timestamptz
+}
+
+model FacebookPage {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  pageId          String
+  pageName        String
+  pageAccessToken String
+  createdAt       DateTime @default(now())
+}

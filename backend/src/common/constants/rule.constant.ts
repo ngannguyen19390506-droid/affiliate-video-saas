@@ -1,0 +1,5 @@
+export const RULE_CONFIG = {
+  MIN_VIDEO_TEST: 5,
+  MAX_VIDEO_TEST: 10,
+  MAX_TEST_DAYS: 7,
+};

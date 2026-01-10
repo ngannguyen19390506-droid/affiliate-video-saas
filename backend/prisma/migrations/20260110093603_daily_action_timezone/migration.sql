@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "DailyAction" ALTER COLUMN "actionDate" SET DATA TYPE TIMESTAMPTZ;
