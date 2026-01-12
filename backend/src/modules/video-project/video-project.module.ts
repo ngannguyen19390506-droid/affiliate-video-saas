@@ -1,14 +1,18 @@
 import { Module } from '@nestjs/common'
+
 import { PrismaModule } from '../../common/prisma/prisma.module'
+import { VideoModule } from '../video/video.module'
+
 import { VideoProjectController } from './video-project.controller'
 import { VideoProjectService } from './video-project.service'
 
 @Module({
   imports: [
-    PrismaModule, // 👈 để dùng PrismaService
+    PrismaModule, // dùng PrismaService
+    VideoModule,  // ✅ inject VideoOrchestratorService
   ],
   controllers: [
-    VideoProjectController, // 👈 BẮT BUỘC để có route /video-projects
+    VideoProjectController,
   ],
   providers: [
     VideoProjectService,

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import * as fs from 'fs'
 import * as path from 'path'
 import { randomUUID } from 'crypto'
+import { RenderStep } from '@prisma/client'
 
 import { TtsService } from '../tts/tts.service'
 import { ScriptService } from './script.service'
@@ -14,6 +15,32 @@ import { RenderVideoOutput } from './dto/render-video.output'
 import { ScriptResult } from './script.schema'
 import { CaptionResult } from './caption.schema'
 
+/* =====================================================
+ * Resume enum (EXPORT BẮT BUỘC)
+ * ===================================================== */
+export enum ResumeFrom {
+  SCRIPT = 'SCRIPT',
+  TTS = 'TTS',
+  RENDER = 'RENDER',
+}
+
+/* =====================================================
+ * Progress callback type
+ * ===================================================== */
+export type RenderProgressFn = (params: {
+  step: RenderStep
+  progress: number
+  message?: string
+}) => Promise<void>
+
+function isScriptResult(data: any): data is ScriptResult {
+  return (
+    data &&
+    typeof data === 'object' &&
+    Array.isArray((data as any).body)
+  )
+}
+
 @Injectable()
 export class VideoOrchestratorService {
   constructor(
@@ -25,7 +52,7 @@ export class VideoOrchestratorService {
   ) {}
 
   /* =====================================================
-   * helper: retry
+   * helpers
    * ===================================================== */
   private async retry<T>(
     fn: () => Promise<T>,
@@ -33,29 +60,27 @@ export class VideoOrchestratorService {
     label: string,
   ): Promise<T> {
     let lastErr: any
-    for (let i = 0; i <= retries; i++) {
+    for (let i = 1; i <= retries; i++) {
       try {
         return await fn()
-      } catch (err) {
-        lastErr = err
+      } catch (e: any) {
+        lastErr = e
         console.warn(
-          `[VideoOrchestrator][Retry] ${label} failed (${i + 1}/${retries + 1})`,
+          `[VideoOrchestrator][Retry][${label}] ${i}/${retries}`,
+          e?.message,
         )
       }
     }
     throw lastErr
   }
 
-  /* =====================================================
-   * helper: timeout
-   * ===================================================== */
   private async withTimeout<T>(
-    promise: Promise<T>,
+    fn: () => Promise<T>,
     ms: number,
     label: string,
   ): Promise<T> {
     return Promise.race([
-      promise,
+      fn(),
       new Promise<never>((_, reject) =>
         setTimeout(
           () => reject(new Error(`${label}_TIMEOUT`)),
@@ -66,145 +91,260 @@ export class VideoOrchestratorService {
   }
 
   /* =====================================================
-   * Orchestrate full flow:
-   * Script → Caption → Voice → TTS → FFmpeg render
+   * GENERATE CONTENT ONLY (SCRIPT + CAPTION)
    * ===================================================== */
-  async renderFromImage(
-    input: RenderFromImageInput,
-  ): Promise<RenderVideoOutput> {
-    console.log('[VideoOrchestrator] INPUT', {
-      imagePath: input.imagePath,
-      outputPath: input.outputPath,
-      textLength: input.text?.length,
-    })
+  async generateContentOnly(input: {
+    inputMedia: any
+    userPrompt?: string | null
+  }): Promise<{
+    script: ScriptResult
+    caption: CaptionResult
+  }> {
+    const imagePath = Array.isArray(input.inputMedia)
+      ? input.inputMedia[0]?.path
+      : input.inputMedia?.imagePath
 
-    /* =========================
-     * 1️⃣ Validate input
-     * ========================= */
-    if (!input.text || input.text.trim().length === 0) {
-      throw new Error('TEXT_EMPTY')
+    if (!imagePath) {
+      throw new Error('INPUT_MEDIA_INVALID')
     }
 
-    if (!fs.existsSync(input.imagePath)) {
-      throw new Error(`IMAGE_NOT_FOUND: ${input.imagePath}`)
-    }
-
-    /* =========================
-     * Prepare temp audio path
-     * ========================= */
-    const tmpDir = path.join(process.cwd(), 'tmp')
-    if (!fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir, { recursive: true })
-    }
-
-    const audioPath = path.join(
-      tmpDir,
-      `voice-${Date.now()}-${randomUUID()}.mp3`,
-    )
-
-    let script: ScriptResult
-    let caption: CaptionResult
-
-    try {
-      /* =========================
-       * 2️⃣ Generate script
-       * ========================= */
-      const scriptResult =
-        await this.scriptService.generate(input.text)
-
-      if (
-        !scriptResult ||
-        typeof scriptResult !== 'object' ||
-        !('hook' in scriptResult) ||
-        !('body' in scriptResult) ||
-        !('cta' in scriptResult)
-      ) {
-        throw new Error('SCRIPT_GENERATION_FAILED')
-      }
-
-      script = scriptResult as ScriptResult
-
-      /* =========================
-       * 3️⃣ Generate caption
-       * ========================= */
-      caption =
-        this.captionService.generateCaption(script)
-
-      /* =========================
-       * 4️⃣ Prepare voice script
-       * ========================= */
-      const voiceScript =
-        this.voiceService.generateVoiceScript(script)
-
-      const voiceText = voiceScript.sentences
-        .map(s => s.text)
-        .join(' ')
-
-      /* =========================
-       * 5️⃣ TTS (retry + timeout)
-       * ========================= */
-      await this.retry(
-        () =>
-          this.withTimeout(
-            this.ttsService.generateVoice(
-              voiceText,
-              audioPath,
-            ),
-            20_000,
-            'TTS',
-          ),
-        2,
-        'TTS',
+    const scriptResult =
+      await this.scriptService.generate(
+        input.userPrompt || '',
       )
 
-      if (!fs.existsSync(audioPath)) {
-        throw new Error('TTS_OUTPUT_NOT_FOUND')
+    if (!isScriptResult(scriptResult)) {
+      throw new Error('SCRIPT_GENERATION_FAILED')
+    }
+
+    const caption =
+      this.captionService.generateCaption(scriptResult)
+
+    return {
+      script: scriptResult,
+      caption,
+    }
+  }
+
+  /* =====================================================
+   * FULL RENDER PIPELINE (RESUME + PROGRESS)
+   * ===================================================== */
+  async renderVideoProject(input: {
+    id: string
+    inputMedia: any
+    userPrompt?: string | null
+    resumeFrom?: ResumeFrom
+    cachedScript?: ScriptResult | null
+    cachedCaption?: string | null
+    onProgress?: RenderProgressFn
+  }): Promise<{
+    script: ScriptResult
+    caption: CaptionResult
+    outputVideo: string
+  }> {
+    const emit = async (
+      step: RenderStep,
+      progress: number,
+      message?: string,
+    ) => {
+      if (input.onProgress) {
+        await input.onProgress({ step, progress, message })
+      }
+    }
+
+    const imagePath = Array.isArray(input.inputMedia)
+      ? input.inputMedia[0]?.path
+      : input.inputMedia?.imagePath
+
+    if (!imagePath) {
+      throw new Error('INPUT_MEDIA_INVALID')
+    }
+
+  /* ======================
+ * OUTPUT PATHS (FIXED)
+ * ====================== */
+
+// 🔹 TÊN FILE
+const outputFilename = `${input.id}.mp4`
+
+// 🔹 PATH LOCAL (CHO FFMPEG + FS)
+const localOutputPath = path.join(
+  process.cwd(),
+  'outputs',
+  outputFilename,
+)
+
+// 🔹 ENSURE DIR LOCAL (❗ DÙNG LOCAL PATH, KHÔNG DÙNG PUBLIC PATH)
+const outputDir = path.dirname(localOutputPath)
+if (!fs.existsSync(outputDir)) {
+  fs.mkdirSync(outputDir, { recursive: true })
+}
+
+// 🔹 URL PUBLIC (TRẢ CHO FE / DB)
+const publicOutputVideo = `/outputs/${outputFilename}`
+
+/* ======================
+ * TMP + AUDIO
+ * ====================== */
+
+const tmpDir = path.join(process.cwd(), 'tmp')
+if (!fs.existsSync(tmpDir)) {
+  fs.mkdirSync(tmpDir, { recursive: true })
+}
+
+const audioPath = path.join(
+  tmpDir,
+  `voice-${Date.now()}-${randomUUID()}.mp3`,
+)
+
+let script!: ScriptResult
+let caption!: CaptionResult
+
+try {
+  /* ======================
+   * SCRIPT
+   * ====================== */
+  if (
+    input.resumeFrom &&
+    input.resumeFrom !== ResumeFrom.SCRIPT &&
+    input.cachedScript
+  ) {
+    script = input.cachedScript
+  } else {
+    await emit(
+      RenderStep.SCRIPTING,
+      25,
+      'Đang tạo kịch bản',
+    )
+
+    const scriptResult =
+      await this.scriptService.generate(
+        input.userPrompt || '',
+      )
+
+    if (!isScriptResult(scriptResult)) {
+      throw new Error('SCRIPT_GENERATION_FAILED')
+    }
+
+    script = scriptResult
+  }
+
+
+      /* ======================
+       * CAPTION
+       * ====================== */
+      caption =
+        input.cachedCaption && input.resumeFrom
+          ? {
+              text: input.cachedCaption,
+              hashtags: [],
+            }
+          : this.captionService.generateCaption(script)
+
+      /* ======================
+       * TTS
+       * ====================== */
+      if (input.resumeFrom !== ResumeFrom.RENDER) {
+        await emit(
+          RenderStep.TTS,
+          60,
+          'Đang tạo giọng đọc',
+        )
+
+        const voiceScript =
+          this.voiceService.generateVoiceScript(script)
+
+        const voiceText = voiceScript.sentences
+          .map(s => s.text)
+          .join(' ')
+
+        await this.retry(
+          () =>
+            this.withTimeout(
+              () =>
+                this.ttsService.generateVoice(
+                  voiceText,
+                  audioPath,
+                ),
+              20_000,
+              'TTS',
+            ),
+          2,
+          'TTS',
+        )
+
+        if (!fs.existsSync(audioPath)) {
+          throw new Error('TTS_OUTPUT_NOT_FOUND')
+        }
       }
 
-      /* =========================
-       * 6️⃣ FFmpeg render
-       * ========================= */
+      /* ======================
+       * RENDER VIDEO
+       * ====================== */
+      await emit(
+        RenderStep.RENDERING,
+        85,
+        'Đang render video',
+      )
+
       await this.retry(
         () =>
           this.withTimeout(
-            this.videoRenderService.renderFromImage({
-              imagePath: input.imagePath,
-              audioPath,
-              outputPath: input.outputPath,
-            }),
+            () =>
+              this.videoRenderService.renderFromImage({
+                imagePath,
+                audioPath,
+                outputPath: localOutputPath,
+              }),
             60_000,
             'FFMPEG',
           ),
-        1,
+        2,
         'FFMPEG',
       )
 
-      /* =========================
-       * 7️⃣ Return result
-       * ========================= */
+      await emit(
+        RenderStep.DONE,
+        100,
+        'Render hoàn tất',
+      )
+
       return {
-        videoPath: input.outputPath,
-        caption,
         script,
+        caption,
+        outputVideo: publicOutputVideo,
       }
     } finally {
-      /* =========================
-       * 8️⃣ Cleanup temp audio
-       * ========================= */
       try {
         if (fs.existsSync(audioPath)) {
           fs.unlinkSync(audioPath)
-          console.log(
-            '[VideoOrchestrator] CLEANUP audio',
-            audioPath,
-          )
         }
-      } catch (e) {
-        console.warn(
-          '[VideoOrchestrator] CLEANUP FAILED',
-          e,
-        )
-      }
+      } catch {}
     }
   }
+    /* =====================================================
+   * LEGACY SUPPORT (for videos.controller & tests)
+   * ===================================================== */
+  async renderFromImage(input: {
+    imagePath: string
+    outputPath: string
+    text: string
+  }): Promise<{
+    videoPath: string
+    caption: CaptionResult
+    script: ScriptResult
+  }> {
+    const result = await this.renderVideoProject({
+      id: `legacy-${Date.now()}`,
+      inputMedia: [{ path: input.imagePath }],
+      userPrompt: input.text,
+    })
+
+    return {
+      videoPath: result.outputVideo,
+      caption: result.caption,
+      script: result.script,
+    }
+  }
+
 }

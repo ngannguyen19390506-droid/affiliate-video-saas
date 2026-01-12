@@ -119,20 +119,62 @@ enum RenderStatus {
 model VideoProject {
   id String @id @default(cuid())
 
-  productId String // ⭐ DÒNG QUYẾT ĐỊNH
+  productId String
 
+  // ===== CONTEXT =====
+  platform VideoPlatform
   type     VideoType
+  template String
   formatId String?
 
+  // ===== INPUT =====
   inputMedia Json
   visionData Json?
-  scriptData Json?
-  voicePath  String?
-  caption    String?
 
-  renderStatus RenderStatus @default(PENDING)
+  // ===== AI OUTPUT =====
+  userPrompt  String?
+  scriptData  Json?
+  voiceScript Json?
+  caption     String?
+
+  // ===== RENDER =====
+  status       VideoProjectStatus @default(DRAFT)
+  renderStatus RenderStatus       @default(PENDING)
+
+  // ✅ NEW
+  renderStep     RenderStep?
+  renderProgress Int              @default(0)
+  renderLogs     Json?
+
+  voicePath    String?
+  outputVideo  String?
+  errorMessage String?
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum RenderStep {
+  ANALYZING
+  SCRIPTING
+  TTS
+  RENDERING
+  DONE
+  ERROR
+}
+
+
+enum VideoProjectStatus {
+  DRAFT
+  GENERATED
+  RENDERING
+  DONE
+  FAILED
+}
+
+enum VideoPlatform {
+  TIKTOK
+  FACEBOOK
 }
 
 model PostSchedule {

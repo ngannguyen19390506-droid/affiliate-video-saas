@@ -39,3 +39,32 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ================================
+# Backend runtime files (IMPORTANT)
+# ================================
+
+# Rendered videos & outputs
+backend/outputs/
+backend/outputs/**/*.mp4
+
+# Uploaded media (images / videos)
+backend/uploads/
+backend/uploads/**
+
+# Temporary audio / ffmpeg files
+backend/tmp/
+backend/tmp/**
+
+# Logs
+backend/logs/
+*.log
+
+# Prisma
+backend/prisma/dev.db
+backend/prisma/*.db
+
+# ================================
+# OS / Tooling
+# ================================
+Thumbs.db

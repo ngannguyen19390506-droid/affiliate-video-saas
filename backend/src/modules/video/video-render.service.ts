@@ -1,129 +1,84 @@
-import { Injectable } from '@nestjs/common';
-import { spawn } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
+import { Injectable } from '@nestjs/common'
+import { spawn } from 'child_process'
+import * as fs from 'fs'
+import * as path from 'path'
 
 type RenderFromImageParams = {
-  imagePath: string;
-  audioPath: string;
-  outputPath: string;
-};
+  imagePath: string
+  audioPath: string
+  outputPath: string
+}
 
 @Injectable()
 export class VideoRenderService {
-  /**
-   * Render video from image + audio using FFmpeg
-   * - resolve ONLY when ffmpeg exit code === 0
-   * - reject on non-zero exit code
-   * - reject on timeout
-   */
   renderFromImage(params: RenderFromImageParams): Promise<void> {
-    const { imagePath, audioPath, outputPath } = params;
+    const { imagePath, audioPath, outputPath } = params
 
     return new Promise((resolve, reject) => {
-      /* ===========================
-       * Validate input files
-       * =========================== */
       if (!fs.existsSync(imagePath)) {
-        return reject(new Error(`IMAGE_NOT_FOUND: ${imagePath}`));
+        return reject(new Error(`IMAGE_NOT_FOUND: ${imagePath}`))
       }
-
       if (!fs.existsSync(audioPath)) {
-        return reject(new Error(`AUDIO_NOT_FOUND: ${audioPath}`));
+        return reject(new Error(`AUDIO_NOT_FOUND: ${audioPath}`))
       }
 
-      /* ===========================
-       * Ensure output directory
-       * =========================== */
-      const outputDir = path.dirname(outputPath);
+      const outputDir = path.dirname(outputPath)
       if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
+        fs.mkdirSync(outputDir, { recursive: true })
       }
 
-      /* ===========================
-       * FFmpeg command
-       * =========================== */
       const args = [
-        '-y', // overwrite
+        '-y',
         '-loop', '1',
         '-i', imagePath,
         '-i', audioPath,
+        '-r', '30',
         '-c:v', 'libx264',
+        '-pix_fmt', 'yuv420p',
         '-tune', 'stillimage',
+        '-vf',
+        'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2',
         '-c:a', 'aac',
         '-b:a', '192k',
-        '-pix_fmt', 'yuv420p',
         '-shortest',
+        '-movflags', '+faststart',
         outputPath,
-      ];
-
-      console.log('[FFmpeg] spawn ffmpeg', args.join(' '));
+      ]
 
       const ffmpeg = spawn('ffmpeg', args, {
-        stdio: ['ignore', 'ignore', 'pipe'], // stderr only
-      });
+        stdio: ['ignore', 'ignore', 'pipe'],
+      })
 
-      let stderr = '';
-      let finished = false;
+      let stderr = ''
+      let finished = false
 
-      /* ===========================
-       * Collect stderr
-       * =========================== */
-      ffmpeg.stderr.on('data', chunk => {
-        stderr += chunk.toString();
-      });
-
-      /* ===========================
-       * Timeout (60s)
-       * =========================== */
-      const TIMEOUT_MS = 60_000;
+      ffmpeg.stderr.on('data', d => {
+        stderr += d.toString()
+        if (stderr.length > 8000) stderr = stderr.slice(-8000)
+      })
 
       const timeout = setTimeout(() => {
-        if (finished) return;
-        finished = true;
+        if (finished) return
+        finished = true
+        ffmpeg.kill('SIGKILL')
+        reject(new Error('FFMPEG_TIMEOUT'))
+      }, 60_000)
 
-        console.error('[FFmpeg] TIMEOUT – killing process');
-        ffmpeg.kill('SIGKILL');
-
-        reject(new Error('FFMPEG_TIMEOUT'));
-      }, TIMEOUT_MS);
-
-      /* ===========================
-       * Exit handling
-       * =========================== */
       ffmpeg.on('close', code => {
-        if (finished) return;
-        finished = true;
-        clearTimeout(timeout);
+        if (finished) return
+        finished = true
+        clearTimeout(timeout)
 
-        if (code === 0) {
-          console.log('[FFmpeg] SUCCESS', outputPath);
-          return resolve();
-        }
+        if (code === 0) return resolve()
+        reject(new Error(`FFMPEG_FAILED (${code})\n${stderr}`))
+      })
 
-        console.error('[FFmpeg] FAILED', {
-          code,
-          stderr,
-        });
-
-        reject(
-          new Error(
-            `FFMPEG_FAILED (code=${code})\n${stderr}`,
-          ),
-        );
-      });
-
-      /* ===========================
-       * Spawn error
-       * =========================== */
       ffmpeg.on('error', err => {
-        if (finished) return;
-        finished = true;
-        clearTimeout(timeout);
-
-        console.error('[FFmpeg] SPAWN ERROR', err);
-        reject(new Error(`FFMPEG_SPAWN_ERROR: ${err.message}`));
-      });
-    });
+        if (finished) return
+        finished = true
+        clearTimeout(timeout)
+        reject(err)
+      })
+    })
   }
 }

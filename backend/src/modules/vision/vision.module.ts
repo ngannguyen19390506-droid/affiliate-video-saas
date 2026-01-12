@@ -1,9 +1,7 @@
-import { Module } from '@nestjs/common';
-import { VisionService } from './vision.service';
-import { VideoProjectModule } from '../video-project/video-project.module';
+import { Module } from '@nestjs/common'
+import { VisionService } from './vision.service'
 
 @Module({
-  imports: [VideoProjectModule], // 👈 QUAN TRỌNG
   providers: [VisionService],
   exports: [VisionService],
 })

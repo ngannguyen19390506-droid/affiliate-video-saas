@@ -1,35 +1,32 @@
-import { Module } from '@nestjs/common';
-import { TtsModule } from '../tts/tts.module';
+import { Module } from '@nestjs/common'
 
-import { VisionModule } from '../vision/vision.module';
-import { VideoProjectModule } from '../video-project/video-project.module';
+import { TtsModule } from '../tts/tts.module'
+import { VisionModule } from '../vision/vision.module'
 
-import { ScriptService } from './script.service';
-import { CaptionService } from './caption.service';
-import { VoiceService } from './voice.service';
-import { VideoRenderService } from './video-render.service';
-import { VideoOrchestratorService } from './video-orchestrator.service';
-import { VideosController } from './videos.controller';
+import { ScriptService } from './script.service'
+import { CaptionService } from './caption.service'
+import { VoiceService } from './voice.service'
+import { VideoRenderService } from './video-render.service'
+import { VideoOrchestratorService } from './video-orchestrator.service'
+import { VideosController } from './videos.controller'
 
 @Module({
   imports: [
     TtsModule,
     VisionModule,
-    VideoProjectModule,
   ],
   controllers: [
-    VideosController,   // ✅ CHỈ THÊM DÒNG NÀY
+    VideosController,
   ],
-
   providers: [
     ScriptService,
     CaptionService,
     VoiceService,
-    VideoRenderService,      // ✅ THÊM DÒNG NÀY
+    VideoRenderService,
     VideoOrchestratorService,
   ],
   exports: [
-    VideoOrchestratorService,
+    VideoOrchestratorService, // ✅ RẤT QUAN TRỌNG
   ],
 })
 export class VideoModule {}
