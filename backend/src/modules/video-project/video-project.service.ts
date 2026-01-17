@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import {
   VideoProjectStatus,
   RenderStatus,
@@ -21,6 +21,7 @@ export class VideoProjectService {
    * CREATE DRAFT
    * ========================= */
   async createDraft(input: {
+    workspaceId: string
     productId: string
     platform: 'TIKTOK' | 'FACEBOOK'
     type: 'SELL' | 'BUILD'
@@ -30,15 +31,18 @@ export class VideoProjectService {
   }) {
     return this.prisma.videoProject.create({
       data: {
+        workspaceId: input.workspaceId, // ✅ FIX
         productId: input.productId,
         platform: input.platform,
         type: input.type,
         template: input.template,
         formatId: input.formatId ?? null,
         inputMedia: input.inputMedia,
+
         status: VideoProjectStatus.DRAFT,
         renderStatus: RenderStatus.PENDING,
         renderProgress: 0,
+        priority: 0,
       },
     })
   }
@@ -47,12 +51,12 @@ export class VideoProjectService {
    * GENERATE CONTENT (AI ONLY)
    * ========================= */
   async generateContent(id: string, userPrompt?: string) {
-  try {
     const project = await this.prisma.videoProject.findUnique({
       where: { id },
     })
+
     if (!project) {
-      throw new Error('VIDEO_PROJECT_NOT_FOUND')
+      throw new NotFoundException('VIDEO_PROJECT_NOT_FOUND')
     }
 
     const result =
@@ -70,12 +74,7 @@ export class VideoProjectService {
         caption: result.caption.text,
       },
     })
-  } catch (e: any) {
-    console.error('[generateContent]', e)
-    throw e
   }
-}
-
 
   /* =========================
    * UPDATE CONTENT (MANUAL)
@@ -105,15 +104,17 @@ export class VideoProjectService {
     const project = await this.prisma.videoProject.findUnique({
       where: { id },
     })
+
     if (!project) {
-      throw new Error('VIDEO_PROJECT_NOT_FOUND')
+      throw new NotFoundException('VIDEO_PROJECT_NOT_FOUND')
     }
 
     if (project.status === VideoProjectStatus.RENDERING) {
-      throw new Error('ALREADY_RENDERING')
-    }
+  throw new Error('ALREADY_RENDERING')
+}
 
-    await this.prisma.videoProject.update({
+
+    const updated = await this.prisma.videoProject.update({
       where: { id },
       data: {
         status: VideoProjectStatus.RENDERING,
@@ -124,7 +125,7 @@ export class VideoProjectService {
       },
     })
 
-    this.runPipeline(project).catch(console.error)
+    this.runPipeline(updated).catch(console.error)
 
     return { status: 'RENDERING' }
   }
@@ -136,8 +137,9 @@ export class VideoProjectService {
     const project = await this.prisma.videoProject.findUnique({
       where: { id },
     })
+
     if (!project) {
-      throw new Error('VIDEO_PROJECT_NOT_FOUND')
+      throw new NotFoundException('VIDEO_PROJECT_NOT_FOUND')
     }
 
     if (project.status !== VideoProjectStatus.FAILED) {
@@ -151,7 +153,7 @@ export class VideoProjectService {
         ? ResumeFrom.TTS
         : ResumeFrom.RENDER
 
-    await this.prisma.videoProject.update({
+    const updated = await this.prisma.videoProject.update({
       where: { id },
       data: {
         status: VideoProjectStatus.RENDERING,
@@ -160,7 +162,7 @@ export class VideoProjectService {
       },
     })
 
-    this.runPipeline(project, resumeFrom).catch(console.error)
+    this.runPipeline(updated, resumeFrom).catch(console.error)
 
     return { status: 'RETRYING', resumeFrom }
   }
@@ -169,7 +171,13 @@ export class VideoProjectService {
    * INTERNAL RENDER PIPELINE
    * ========================= */
   private async runPipeline(
-    project: any,
+    project: {
+      id: string
+      inputMedia: any
+      userPrompt?: string | null
+      scriptData?: any
+      caption?: string | null
+    },
     resumeFrom?: ResumeFrom,
   ) {
     try {
@@ -196,6 +204,8 @@ export class VideoProjectService {
         data: {
           status: VideoProjectStatus.DONE,
           renderStatus: RenderStatus.DONE,
+          renderStep: RenderStep.DONE,
+          renderProgress: 100,
           outputVideo: result.outputVideo,
         },
       })
@@ -205,7 +215,7 @@ export class VideoProjectService {
         data: {
           status: VideoProjectStatus.FAILED,
           renderStatus: RenderStatus.FAIL,
-          errorMessage: e.message,
+          errorMessage: e.message ?? 'UNKNOWN_RENDER_ERROR',
         },
       })
     }
@@ -222,20 +232,30 @@ export class VideoProjectService {
   }) {
     const { videoProjectId, step, progress, message } = params
 
+    const project = await this.prisma.videoProject.findUnique({
+      where: { id: videoProjectId },
+      select: { renderLogs: true },
+    })
+
+    const logs = Array.isArray(project?.renderLogs)
+      ? project.renderLogs
+      : []
+
     await this.prisma.videoProject.update({
       where: { id: videoProjectId },
       data: {
         renderStep: step,
         renderProgress: progress,
         renderLogs: message
-          ? {
-              push: {
+          ? [
+              ...logs,
+              {
                 step,
                 message,
                 at: new Date().toISOString(),
               },
-            }
-          : undefined,
+            ]
+          : logs,
       },
     })
   }
@@ -244,15 +264,30 @@ export class VideoProjectService {
    * QUERY
    * ========================= */
   async getById(id: string) {
-    return this.prisma.videoProject.findUnique({
+    const project = await this.prisma.videoProject.findUnique({
       where: { id },
     })
+
+    if (!project) {
+      throw new NotFoundException('VIDEO_PROJECT_NOT_FOUND')
+    }
+
+    return project
   }
 
-  async list(status?: VideoProjectStatus) {
+  async list(params: {
+    workspaceId: string
+    status?: VideoProjectStatus
+  }) {
     return this.prisma.videoProject.findMany({
-      where: status ? { status } : undefined,
-      orderBy: { createdAt: 'desc' },
+      where: {
+        workspaceId: params.workspaceId, // ✅ FIX
+        ...(params.status && { status: params.status }),
+      },
+      orderBy: [
+        { priority: 'desc' },
+        { createdAt: 'desc' },
+      ],
     })
   }
 }

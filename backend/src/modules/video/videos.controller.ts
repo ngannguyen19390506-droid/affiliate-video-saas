@@ -4,6 +4,8 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  NotFoundException,
+  Param,
   Post,
   Query,
 } from '@nestjs/common'
@@ -68,7 +70,7 @@ export class VideosController {
 
   /* =====================================================
    * GET /videos
-   * Query videos for FE (dropdown)
+   * Query videos (Dashboard list)
    * ===================================================== */
   @Get()
   async getVideos(
@@ -82,5 +84,24 @@ export class VideosController {
         createdAt: 'desc',
       },
     })
+  }
+
+  /* =====================================================
+   * ✅ GET /videos/:id
+   * Video detail (Video Detail Page)
+   * ===================================================== */
+  @Get(':id')
+  async getVideoById(
+    @Param('id') id: string,
+  ) {
+    const video = await this.prisma.video.findUnique({
+      where: { id },
+    })
+
+    if (!video) {
+      throw new NotFoundException('VIDEO_NOT_FOUND')
+    }
+
+    return video
   }
 }

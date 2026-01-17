@@ -21,31 +21,32 @@ export class VideoProjectController {
 
   /**
    * =========================
-   * CREATE VIDEO PROJECT
+   * CREATE VIDEO PROJECT (DRAFT + AI CONTENT)
    * =========================
-   * Support:
-   * 1️⃣ multipart upload
-   * 2️⃣ raw inputMedia JSON
    */
   @Post()
   @UseInterceptors(
-  FilesInterceptor('files', 1, {
-    dest: 'uploads', // 🔥 BẮT BUỘC
-  }),
-)
+    FilesInterceptor('files', 10, {
+      dest: 'uploads',
+    }),
+  )
   async create(
     @UploadedFiles() files: any[],
     @Body()
     body: {
+      workspaceId?: string
       productId: string
       platform: 'TIKTOK' | 'FACEBOOK'
       type: 'SELL' | 'BUILD'
       template: string
       formatId?: string
       inputMedia?: any
+      userPrompt?: string
     },
   ) {
-    let inputMedia: any
+    const workspaceId = body.workspaceId ?? 'TEMP_WORKSPACE_ID'
+
+    let inputMedia: any[]
 
     if (files && files.length > 0) {
       // MODE 1: multipart upload
@@ -60,7 +61,9 @@ export class VideoProjectController {
       throw new Error('INPUT_MEDIA_REQUIRED')
     }
 
-    return this.videoProjectService.createDraft({
+    // 1️⃣ Create DRAFT project
+    const project = await this.videoProjectService.createDraft({
+      workspaceId, // ✅ FIX
       productId: body.productId,
       platform: body.platform,
       type: body.type,
@@ -68,22 +71,15 @@ export class VideoProjectController {
       formatId: body.formatId,
       inputMedia,
     })
-  }
 
-  /**
-   * =========================
-   * GENERATE AI CONTENT
-   * =========================
-   */
-  @Post(':id/generate')
-  async generate(
-    @Param('id') id: string,
-    @Body() body: { userPrompt?: string },
-  ) {
-    return this.videoProjectService.generateContent(
-      id,
+    // 2️⃣ Generate AI content
+    await this.videoProjectService.generateContent(
+      project.id,
       body.userPrompt,
     )
+
+    // 3️⃣ Return FULL draft
+    return this.videoProjectService.getById(project.id)
   }
 
   /**
@@ -127,7 +123,7 @@ export class VideoProjectController {
 
   /**
    * =========================
-   * GET DETAIL (for FE polling)
+   * GET DETAIL
    * =========================
    */
   @Get(':id')
@@ -137,11 +133,17 @@ export class VideoProjectController {
 
   /**
    * =========================
-   * LIST
+   * LIST (workspace-aware)
    * =========================
    */
   @Get()
-  async list(@Query('status') status?: VideoProjectStatus) {
-    return this.videoProjectService.list(status)
+  async list(
+    @Query('status') status?: VideoProjectStatus,
+    @Query('workspaceId') workspaceId?: string,
+  ) {
+    return this.videoProjectService.list({
+      workspaceId: workspaceId ?? 'TEMP_WORKSPACE_ID', // ✅ FIX
+      status,
+    })
   }
 }

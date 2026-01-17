@@ -24,24 +24,24 @@ export default function DailyActionCard({
   const router = useRouter()
 
   function handlePrimaryAction() {
-    // 1️⃣ Mark DONE ngay
-    onDone(action.id)
+    // ❌ KHÔNG mark done ở đây
 
-    // 2️⃣ Điều hướng theo action
+    // ✅ Điều hướng + truyền đủ context
     if (
       action.actionType === 'MAKE_MORE_VIDEOS' ||
-      action.actionType === 'RETEST_WITH_NEW_FORMAT'
+      action.actionType === 'RETEST_WITH_NEW_FORMAT' ||
+      action.actionType === 'SCALE_FORMAT'
     ) {
-      router.push(`/video/create?productId=${action.productId}`)
-    }
-
-    if (action.actionType === 'SCALE_FORMAT') {
       router.push(
-        `/video/create?productId=${action.productId}&mode=scale`
+        `/video/create?productId=${action.productId}&actionType=${action.actionType}&dailyActionId=${action.id}`
       )
+      return
     }
 
-    // STOP_PRODUCT: không điều hướng
+    // STOP_PRODUCT: chỉ mark done, không điều hướng
+    if (action.actionType === 'STOP_PRODUCT') {
+      onDone(action.id)
+    }
   }
 
   return (

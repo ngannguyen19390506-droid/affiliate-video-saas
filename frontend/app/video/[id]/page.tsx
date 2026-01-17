@@ -1,54 +1,73 @@
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+
 import VideoProgress from '../components/VideoProgress'
 import { VideoPreview } from '../components/VideoPreview'
+import type { VideoProject } from '../types'
 
-type VideoProject = {
-  id: string
-  renderStatus: 'PENDING' | 'RENDERING' | 'DONE' | 'FAILED'
-  outputVideo?: string | null
-}
-
-async function fetchVideoProject(id: string): Promise<VideoProject> {
-  const baseUrl = process.env.API_BASE_URL
-
+async function fetchVideoProject(
+  id: string,
+): Promise<VideoProject | null> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL
   if (!baseUrl) {
-    throw new Error('API_BASE_URL is not defined')
+    throw new Error('NEXT_PUBLIC_API_URL is not defined')
   }
 
   const res = await fetch(
     `${baseUrl}/video-projects/${id}`,
-    { cache: 'no-store' }
+    { cache: 'no-store' },
   )
 
-  if (!res.ok) {
-    throw new Error(`FAILED_TO_FETCH_VIDEO_PROJECT (${res.status})`)
+  // ✅ CASE 404 → chưa có project
+  if (res.status === 404) {
+    console.log('[VideoDetail] project not found yet')
+    return null
   }
 
-  return res.json()
+  // ❌ các lỗi khác vẫn là lỗi thật
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(
+      `FAILED_TO_FETCH_VIDEO_PROJECT (${res.status}): ${text}`,
+    )
+  }
+
+  const text = await res.text()
+  if (!text) return null
+
+  return JSON.parse(text)
 }
+
+
 
 export default async function VideoDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
+  // ✅ params là Promise trong Next 15+
   const { id } = await params
+  console.log('[VideoDetailPage] route param id =', id)
+
   const video = await fetchVideoProject(id)
+  console.log('[VideoDetailPage] video result =', video)
 
- const previewUrl =
-  video.renderStatus === 'DONE' && video.outputVideo
-    ? `http://localhost:3000${video.outputVideo}`
-    : null
-
-  // 🔥 SERVER LOG
-  console.log('[VideoDetailPage] previewUrl =', previewUrl)
+  // ✅ Trạng thái an toàn khi BE chưa return data
+  if (!video) {
+    return (
+      <div className="max-w-3xl mx-auto p-6 space-y-4">
+        <h1 className="text-xl font-semibold">Video đang xử lý</h1>
+        <p className="text-gray-500">
+          ⏳ Video chưa sẵn sàng. Vui lòng chờ trong giây lát...
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
-      <VideoProgress videoId={id} />
-
-      {previewUrl && <VideoPreview videoUrl={previewUrl} />}
+      <VideoProgress video={video} />
+      <VideoPreview outputVideo={video.outputVideo ?? null} />
     </div>
   )
 }

@@ -119,6 +119,9 @@ enum RenderStatus {
 model VideoProject {
   id String @id @default(cuid())
 
+  workspaceId String
+  priority    Int @default(0)
+
   productId String
 
   // ===== CONTEXT =====

@@ -3,8 +3,18 @@ import type { NextRequest } from 'next/server'
 export async function proxy(req: NextRequest) {
   const url = req.nextUrl
 
-  // Chỉ proxy cho /video/*.mp4
-  if (!url.pathname.startsWith('/video/')) {
+  /**
+   * =========================
+   * CHỈ proxy file video .mp4
+   * =========================
+   * ✅ /video/abc.mp4  → backend
+   * ❌ /video/create   → bỏ qua (Next.js page)
+   * ❌ /video/123      → bỏ qua (Next.js page)
+   */
+  if (
+    !url.pathname.startsWith('/video/') ||
+    !url.pathname.endsWith('.mp4')
+  ) {
     return
   }
 

@@ -15,6 +15,17 @@ import { RenderVideoOutput } from './dto/render-video.output'
 import { ScriptResult } from './script.schema'
 import { CaptionResult } from './caption.schema'
 
+
+function resolveMediaPath(relativePath: string) {
+  const absPath = path.resolve(process.cwd(), relativePath)
+
+  if (!fs.existsSync(absPath)) {
+    throw new Error(`IMAGE_NOT_FOUND: ${absPath}`)
+  }
+
+  return absPath
+}
+
 /* =====================================================
  * Resume enum (EXPORT BẮT BUỘC)
  * ===================================================== */

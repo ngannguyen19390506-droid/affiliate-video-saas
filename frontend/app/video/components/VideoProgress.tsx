@@ -1,84 +1,47 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { StatusBadge } from '@/app/components/StatusBadge'
 import { ProgressBar } from './ProgressBar'
 import { RenderStep } from './RenderStep'
 import { RenderLog } from './RenderLog'
+import type { VideoProject } from '../types'
 
-type VideoProject = {
-  id: string
-  renderStatus: 'PENDING' | 'RENDERING' | 'DONE' | 'FAILED'
-  progress: number
-  renderStep: string
-  logs: {
-    step: string
-    message: string
-    at: string
-  }[]
-  errorMessage?: string
+type Props = {
+  video: VideoProject
 }
 
-export default function VideoProgress({ videoId }: { videoId: string }) {
-  const [data, setData] = useState<VideoProject | null>(null)
-
-  async function fetchData() {
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/video-projects/${videoId}`,
-        { cache: 'no-store' }
-      )
-
-      if (!res.ok) {
-        console.warn('Fetch failed:', res.status)
-        return
-      }
-
-      const contentType = res.headers.get('content-type')
-      if (!contentType?.includes('application/json')) {
-        console.warn('Response is not JSON:', contentType)
-        return
-      }
-
-      const json = await res.json()
-
-      setData({
-        ...json,
-        progress: json.renderProgress ?? 0,
-        logs: json.renderLogs
-          ? Object.values(json.renderLogs)
-          : [],
-      })
-    } catch (err) {
-      console.error('fetchData error:', err)
-    }
-  }
-
-  useEffect(() => {
-    fetchData()
-    const timer = setInterval(fetchData, 2000)
-    return () => clearInterval(timer)
-  }, [videoId])
-
-  if (!data) return <div>Loading...</div>
+export default function VideoProgress({ video }: Props) {
+  const logs =
+    video.renderLogs
+      ? Object.values(video.renderLogs)
+      : []
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Video Render</h1>
-        <StatusBadge status={data.renderStatus} />
+        <h1 className="text-xl font-bold">
+          Video Render
+        </h1>
+
+        <StatusBadge
+  status={
+    video.renderStatus === 'IDLE'
+      ? 'PENDING'
+      : video.renderStatus
+  }
+/>
+
       </div>
 
       {/* Progress */}
-      <ProgressBar value={data.progress} />
+      <ProgressBar value={video.renderProgress ?? 0} />
 
       {/* Current step */}
-      <RenderStep step={data.renderStep} />
+      <RenderStep step={video.renderStep ?? ''} />
 
       {/* Logs */}
-      <RenderLog logs={data.logs ?? []} />
+      <RenderLog logs={logs} />
     </div>
   )
 }
-
