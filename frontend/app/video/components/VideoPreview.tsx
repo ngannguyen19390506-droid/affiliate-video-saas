@@ -1,22 +1,16 @@
 'use client'
 
 type VideoPreviewProps = {
-  videoUrl: string
+  outputVideo: string | null
 }
 
-export function VideoPreview({ videoUrl }: VideoPreviewProps) {
-  // 🔥 LOG QUAN TRỌNG – NHÌN VÀO ĐÂY
-  console.log('[VideoPreview] videoUrl =', videoUrl)
+export function VideoPreview({ outputVideo }: VideoPreviewProps) {
+  if (!outputVideo) return null
 
-  // ❗ Guard: tuyệt đối KHÔNG render nếu URL sai
-  if (!videoUrl.startsWith('http')) {
-    console.error('[VideoPreview] INVALID videoUrl:', videoUrl)
-    return (
-      <div className="text-red-600 text-sm">
-        ❌ Invalid video URL
-      </div>
-    )
-  }
+  const videoUrl =
+    `${process.env.NEXT_PUBLIC_API_URL}${outputVideo}`
+
+  console.log('[VideoPreview] videoUrl =', videoUrl)
 
   return (
     <div className="mt-6 space-y-3">

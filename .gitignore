@@ -30,3 +30,6 @@ Thumbs.db
 
 # ===== Others =====
 coverage/
+
+# SQLite backups
+*.db.backup*
