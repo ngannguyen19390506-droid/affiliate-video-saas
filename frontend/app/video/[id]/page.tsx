@@ -1,9 +1,9 @@
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-import VideoProgress from '../components/VideoProgress'
-import { VideoPreview } from '../components/VideoPreview'
 import type { VideoProject } from '../types'
+import { revalidatePath } from 'next/cache'
+import VideoDetailClient from './components/VideoDetailClient'
 
 async function fetchVideoProject(
   id: string,
@@ -18,13 +18,8 @@ async function fetchVideoProject(
     { cache: 'no-store' },
   )
 
-  // ✅ CASE 404 → chưa có project
-  if (res.status === 404) {
-    console.log('[VideoDetail] project not found yet')
-    return null
-  }
+  if (res.status === 404) return null
 
-  // ❌ các lỗi khác vẫn là lỗi thật
   if (!res.ok) {
     const text = await res.text()
     throw new Error(
@@ -32,27 +27,35 @@ async function fetchVideoProject(
     )
   }
 
-  const text = await res.text()
-  if (!text) return null
-
-  return JSON.parse(text)
+  return res.json()
 }
 
+/**
+ * 🔁 Server Action: Retry render
+ */
+async function retryRender(id: string) {
+  'use server'
 
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL
+  if (!baseUrl) {
+    throw new Error('NEXT_PUBLIC_API_URL is not defined')
+  }
+
+  await fetch(`${baseUrl}/video-projects/${id}/retry`, {
+    method: 'POST',
+  })
+
+  revalidatePath(`/video/${id}`)
+}
 
 export default async function VideoDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
-  // ✅ params là Promise trong Next 15+
   const { id } = await params
-  console.log('[VideoDetailPage] route param id =', id)
-
   const video = await fetchVideoProject(id)
-  console.log('[VideoDetailPage] video result =', video)
 
-  // ✅ Trạng thái an toàn khi BE chưa return data
   if (!video) {
     return (
       <div className="max-w-3xl mx-auto p-6 space-y-4">
@@ -66,8 +69,22 @@ export default async function VideoDetailPage({
 
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
-      <VideoProgress video={video} />
-      <VideoPreview outputVideo={video.outputVideo ?? null} />
+      <VideoDetailClient
+        initialVideo={video}
+        videoId={id}
+      />
+
+      {/* 🔁 RETRY */}
+      {video.renderStatus === 'FAILED' && (
+        <form action={retryRender.bind(null, video.id)}>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-red-600 text-white rounded"
+          >
+            Retry render
+          </button>
+        </form>
+      )}
     </div>
   )
 }
