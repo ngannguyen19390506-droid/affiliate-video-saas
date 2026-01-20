@@ -33,3 +33,12 @@ coverage/
 
 # SQLite backups
 *.db.backup*
+
+# ===== Backend generated files =====
+backend/outputs/
+backend/uploads/
+backend/src/modules/files/
+
+# ===== Dashboard WIP (not committed yet) =====
+frontend/app/dashboard/ProgressBar.tsx
+frontend/app/dashboard/StatusBadge.tsx
