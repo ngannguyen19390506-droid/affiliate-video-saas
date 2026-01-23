@@ -43,7 +43,6 @@ export class ProductMetricsService {
       testDays,
       avgViews,
       totalClicks,
-      hasOrder: false, // MVP: chưa tracking order
     };
   }
 }

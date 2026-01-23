@@ -21,7 +21,7 @@ export class ShouldContinueRule implements Rule {
 
     if (hasEnoughVideos && hasPositiveSignal) {
       return {
-        action: RuleAction.CONTINUE_PRODUCT,
+        action: RuleAction.SCALE_FORMAT,
         reason: 'Có tín hiệu tốt (view hoặc click)',
         priority: 2,
 
@@ -29,7 +29,6 @@ export class ShouldContinueRule implements Rule {
          * CONTINUE ≠ spam video ngay
          * Quyết định schedule cụ thể để Daily Action xử lý
          */
-        allowSchedule: false,
         nextProductStatus: 'CONTINUE',
       };
     }

@@ -109,21 +109,26 @@ export class VideoProjectService {
       throw new NotFoundException('VIDEO_PROJECT_NOT_FOUND')
     }
 
-    if (project.status === VideoProjectStatus.RENDERING) {
+    if (project.renderStatus === RenderStatus.RENDERING)
+ {
   throw new Error('ALREADY_RENDERING')
 }
 
 
     const updated = await this.prisma.videoProject.update({
-      where: { id },
-      data: {
-        status: VideoProjectStatus.RENDERING,
-        renderStatus: RenderStatus.PENDING,
-        renderStep: RenderStep.ANALYZING,
-        renderProgress: 0,
-        errorMessage: null,
-      },
-    })
+  where: { id },
+  data: {
+    // lifecycle KHÔNG đổi ở đây
+    status: VideoProjectStatus.GENERATED,
+
+    // render state
+    renderStatus: RenderStatus.RENDERING,
+    renderStep: RenderStep.ANALYZING,
+    renderProgress: 0,
+    errorMessage: null,
+  },
+})
+
 
     this.runPipeline(updated).catch(console.error)
 
@@ -142,9 +147,10 @@ export class VideoProjectService {
       throw new NotFoundException('VIDEO_PROJECT_NOT_FOUND')
     }
 
-    if (project.status !== VideoProjectStatus.FAILED) {
-      throw new Error('ONLY_FAILED_CAN_RETRY')
-    }
+    if (project.renderStatus !== RenderStatus.FAILED) {
+  throw new Error('ONLY_FAILED_CAN_RETRY')
+}
+
 
     const resumeFrom =
       project.renderStep === RenderStep.SCRIPTING
@@ -154,13 +160,19 @@ export class VideoProjectService {
         : ResumeFrom.RENDER
 
     const updated = await this.prisma.videoProject.update({
-      where: { id },
-      data: {
-        status: VideoProjectStatus.RENDERING,
-        renderStatus: RenderStatus.PENDING,
-        errorMessage: null,
-      },
-    })
+  where: { id },
+  data: {
+    // lifecycle giữ nguyên (DRAFT / GENERATED / ARCHIVED)
+    status: VideoProjectStatus.GENERATED,
+
+    // reset render state để retry
+    renderStatus: RenderStatus.RENDERING,
+    renderStep: RenderStep.ANALYZING,
+    renderProgress: 0,
+    errorMessage: null,
+  },
+})
+
 
     this.runPipeline(updated, resumeFrom).catch(console.error)
 
@@ -200,24 +212,32 @@ export class VideoProjectService {
         })
 
       await this.prisma.videoProject.update({
-        where: { id: project.id },
-        data: {
-          status: VideoProjectStatus.DONE,
-          renderStatus: RenderStatus.DONE,
-          renderStep: RenderStep.DONE,
-          renderProgress: 100,
-          outputVideo: result.outputVideo,
-        },
-      })
-    } catch (e: any) {
-      await this.prisma.videoProject.update({
-        where: { id: project.id },
-        data: {
-          status: VideoProjectStatus.FAILED,
-          renderStatus: RenderStatus.FAIL,
-          errorMessage: e.message ?? 'UNKNOWN_RENDER_ERROR',
-        },
-      })
+  where: { id: project.id },
+  data: {
+    // lifecycle giữ nguyên (thường là GENERATED)
+    status: VideoProjectStatus.GENERATED,
+
+    // render thành công
+    renderStatus: RenderStatus.DONE,
+    renderStep: RenderStep.DONE,
+    renderProgress: 100,
+    outputVideo: result.outputVideo,
+    errorMessage: null,
+  },
+})
+} catch (e: any) {
+  await this.prisma.videoProject.update({
+    where: { id: project.id },
+    data: {
+      // lifecycle KHÔNG đổi
+      status: VideoProjectStatus.GENERATED,
+
+      // render thất bại
+      renderStatus: RenderStatus.FAILED,
+      renderStep: RenderStep.ERROR,
+      errorMessage: e.message ?? 'UNKNOWN_RENDER_ERROR',
+    },
+  })
     }
   }
 

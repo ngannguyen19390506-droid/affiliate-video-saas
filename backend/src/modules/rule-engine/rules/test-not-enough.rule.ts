@@ -17,9 +17,6 @@ export class TestNotEnoughRule implements Rule {
         action: RuleAction.MAKE_MORE_VIDEOS,
         reason: 'Chưa đủ số video để đánh giá sản phẩm',
         priority: 1,
-
-        // 🔽 THÊM THEO INTERFACE MỚI
-        allowSchedule: true,
         nextProductStatus: 'TEST',
       };
     }

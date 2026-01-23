@@ -32,18 +32,27 @@ model Product {
 model Video {
   id        String @id @default(uuid())
   productId String
-  views     Int    @default(0)
-  clicks    Int    @default(0)
 
-  renderStatus String  @default("PROCESSING") // 👈 THÊM
-  outputPath   String? // 👈 THÊM
+  // Phân loại video để phục vụ rule & fatigue
+  type   VideoType // SELL | BUILD
+  format String    // POV / BEFORE_AFTER / REVIEW...
+
+  // Analytics (nhập tay giai đoạn 1)
+  views  Int @default(0)
+  clicks Int @default(0)
+
+  // Trạng thái render
+  renderStatus RenderStatus @default(PENDING)
+  outputPath   String?
 
   createdAt DateTime @default(now())
 
   product Product @relation(fields: [productId], references: [id])
 
   @@index([productId])
+  @@index([format])
 }
+
 
 model Workspace {
   id        String   @id @default(uuid())
@@ -78,12 +87,19 @@ model DailyAction {
   reason     String
   metadata   Json?
 
+  // Ngày action có hiệu lực (theo ngày, không theo giờ)
   actionDate DateTime @db.Timestamptz
 
+  // Trạng thái thực hiện
   isDone    Boolean   @default(false)
   doneAt    DateTime?
   createdAt DateTime  @default(now())
+
+  // ⛔ Chống tạo action trùng trong cùng 1 ngày
+  @@unique([workspaceId, productId, actionType, actionDate])
+  @@index([workspaceId, actionDate])
 }
+
 
 enum DailyActionType {
   MAKE_MORE_VIDEOS
@@ -111,10 +127,12 @@ enum VideoType {
 }
 
 enum RenderStatus {
-  PENDING
-  DONE
-  FAIL
+  PENDING     // sẵn sàng render / chờ worker
+  RENDERING   // đang chạy
+  DONE        // render xong
+  FAILED      // lỗi
 }
+
 
 model VideoProject {
   id String @id @default(cuid())
@@ -168,12 +186,11 @@ enum RenderStep {
 
 
 enum VideoProjectStatus {
-  DRAFT
-  GENERATED
-  RENDERING
-  DONE
-  FAILED
+  DRAFT        // mới tạo, đang chỉnh prompt
+  GENERATED    // đã có script / caption / voice script
+  ARCHIVED     // video cũ, không dùng nữa
 }
+
 
 enum VideoPlatform {
   TIKTOK

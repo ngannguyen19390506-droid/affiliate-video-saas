@@ -76,8 +76,12 @@ export class ScheduleProcessor {
       // 5️⃣ Evaluate rule
       const ruleResult = this.ruleEngine.evaluate(metrics, ruleConfig)
 
-      // ⛔ RULE BLOCK SCHEDULE
-      if (ruleResult && !ruleResult.allowSchedule) {
+      /**
+       * ⛔ HARD RULE
+       * → STOP_PRODUCT (stop-loss)
+       * → block schedule + update product
+       */
+      if (ruleResult?.hard) {
         this.logger.log(
           `[RULE BLOCK] Schedule ${schedule.id} – ${ruleResult.reason}`,
         )
@@ -100,7 +104,11 @@ export class ScheduleProcessor {
         return // ⛔ DỪNG FLOW, KHÔNG POST
       }
 
-      // update product status if allowed
+      /**
+       * 🟡 SOFT RULE
+       * → chỉ update product status
+       * → vẫn cho post
+       */
       if (ruleResult) {
         await this.prisma.product.update({
           where: { id: product.id },
@@ -167,7 +175,7 @@ export class ScheduleProcessor {
         return 'Facebook Page not configured'
       case 'PLATFORM_NOT_SUPPORTED':
         return 'Platform not supported'
-      case 'PRODUCT_NOT_FOUND':
+      case 'PRODUCT_NOT_FOUNpD':
         return 'Product not found'
       default:
         return 'Publish failed'

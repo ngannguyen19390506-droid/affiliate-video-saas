@@ -23,10 +23,12 @@ export default function DailyActionCard({
 }: Props) {
   const router = useRouter()
 
-  function handlePrimaryAction() {
-    // ❌ KHÔNG mark done ở đây
+  // ✅ Guard: chỉ xử lý action PENDING
+  if (action.status !== 'PENDING') {
+    return null
+  }
 
-    // ✅ Điều hướng + truyền đủ context
+  function handlePrimaryAction() {
     if (
       action.actionType === 'MAKE_MORE_VIDEOS' ||
       action.actionType === 'RETEST_WITH_NEW_FORMAT' ||
@@ -38,7 +40,6 @@ export default function DailyActionCard({
       return
     }
 
-    // STOP_PRODUCT: chỉ mark done, không điều hướng
     if (action.actionType === 'STOP_PRODUCT') {
       onDone(action.id)
     }

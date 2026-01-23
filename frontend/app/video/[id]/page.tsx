@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-import type { VideoProject } from '../types'
+import type { VideoProject } from './types'
 import { revalidatePath } from 'next/cache'
 import VideoDetailClient from './components/VideoDetailClient'
 

@@ -53,9 +53,6 @@ export class DailyActionService {
       const result = this.ruleEngine.evaluate(metrics, config);
       if (!result) continue;
 
-      // 🔥 TÔN TRỌNG RULE ENGINE
-      if (!result.allowSchedule) continue;
-
       actions.push({
         productId: product.id,
         action: result.action,

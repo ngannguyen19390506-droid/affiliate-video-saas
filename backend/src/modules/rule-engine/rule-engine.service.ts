@@ -21,8 +21,8 @@ export class RuleEngineService {
     /**
      * Thứ tự chỉ để đọc dễ hiểu
      * Quyết định cuối cùng dựa vào:
-     * - HARD STOP (STOP_LOSS)
-     * - priority
+     * - HARD RULE (ví dụ STOP_LOSS)
+     * - priority (số nhỏ hơn = quan trọng hơn)
      */
     this.rules = [
       new StopLossRule(),        // HARD RULE
@@ -47,10 +47,10 @@ export class RuleEngineService {
       }
 
       /**
-       * 🔥 HARD STOP RULE
-       * STOP_LOSS = match là return ngay
+       * 🔥 HARD RULE
+       * Nếu rule đánh dấu hard = true → return ngay
        */
-      if (result.action === RuleAction.STOP_LOSS) {
+      if (result.hard === true) {
         return result;
       }
 

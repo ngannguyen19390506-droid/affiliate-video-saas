@@ -20,4 +20,3 @@ describe('AppController', () => {
     });
   });
 });
-console.log('[DAILY ACTIONS] called')

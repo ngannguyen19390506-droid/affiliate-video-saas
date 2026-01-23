@@ -21,9 +21,6 @@ export class ShouldStopRule implements Rule {
         action: RuleAction.STOP_PRODUCT,
         reason: 'Test đủ số video và thời gian nhưng không có click',
         priority: 3,
-
-        // 🔽 BẮT BUỘC THÊM
-        allowSchedule: false,
         nextProductStatus: 'STOP',
       };
     }

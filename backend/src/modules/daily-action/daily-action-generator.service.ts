@@ -106,22 +106,20 @@ export class DailyActionGeneratorService {
           v => v.productId === product.id,
         );
 
-        const metrics = this.productMetricsService.buildMetrics({
-          productId: product.id,
-          createdAt: product.createdAt,
-          videos: videoStat
-            ? [{
-                views: videoStat._sum.views ?? 0,
-                clicks: videoStat._sum.clicks ?? 0,
-              }]
-            : [],
-        });
+        const videos = await this.prisma.video.findMany({
+  where: { productId: product.id },
+});
+
+const metrics = this.productMetricsService.buildMetrics({
+  productId: product.id,
+  createdAt: product.createdAt,
+  videos,
+});
+
+
 
         const result = this.ruleEngine.evaluate(metrics, ruleConfig);
         if (!result) continue;
-
-        // 🔥 respect allowSchedule
-        if (!result.allowSchedule) continue;
 
         actions.push({
           productId: product.id,
@@ -213,12 +211,12 @@ export class DailyActionGeneratorService {
     case RuleAction.MAKE_MORE_VIDEOS:
       return DailyActionType.MAKE_MORE_VIDEOS;
 
-    case RuleAction.CONTINUE_PRODUCT:
+    case RuleAction.SCALE_FORMAT:
       // CONTINUE = nhân bản format tốt
       return DailyActionType.SCALE_FORMAT;
 
     case RuleAction.STOP_PRODUCT:
-    case RuleAction.STOP_LOSS:
+    case RuleAction.STOP_PRODUCT:
       return DailyActionType.STOP_PRODUCT;
 
     default:

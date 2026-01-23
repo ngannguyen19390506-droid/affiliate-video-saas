@@ -23,7 +23,6 @@ type DailyAction = {
   }
 }
 
-
 type VideoProject = {
   id: string
   productId: string
@@ -57,6 +56,43 @@ export default function DashboardPage() {
   // ===== VIDEOS =====
   const [renderingVideos, setRenderingVideos] = useState<VideoProject[]>([])
   const [doneVideos, setDoneVideos] = useState<VideoProject[]>([])
+
+  /* ======================
+   ONBOARDING GUARD
+====================== */
+useEffect(() => {
+  const checkOnboarding = async () => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL
+      if (!API_URL) return
+
+      const res = await fetch(
+        `${API_URL}/workspaces/${WORKSPACE_ID}/daily-actions/today`,
+        { cache: 'no-store' }
+      )
+
+      // ❗ backend chưa sẵn sàng / lỗi → không redirect
+      if (!res.ok) return
+
+      const actions = await res.json()
+
+      /**
+       * QUY ƯỚC:
+       * - Chưa có product → chưa có DailyAction → onboarding
+       * - Có product → dù chưa generate action → vẫn cho vào dashboard
+       */
+      if (Array.isArray(actions) && actions.length === 0) {
+        router.replace('/onboarding')
+      }
+    } catch (e) {
+      console.error('[OnboardingGuard] failed', e)
+    }
+  }
+
+  checkOnboarding()
+}, [router])
+
+
 
   /* ======================
      FETCH DAILY ACTION
@@ -124,7 +160,7 @@ export default function DashboardPage() {
     }
 
     fetchVideos()
-    const timer = setInterval(fetchVideos, 5000) // auto refresh
+    const timer = setInterval(fetchVideos, 5000)
     return () => clearInterval(timer)
   }, [])
 
@@ -148,59 +184,39 @@ export default function DashboardPage() {
           DAILY ACTION
       ====================== */}
       {action ? (
-  <div className="mt-6 max-w-md rounded-xl border p-4 shadow-sm bg-white">
-    <h2 className="font-semibold mb-2">
-      📌 Sản phẩm: {action.product.id}
-    </h2>
+        <div className="mt-6 max-w-md rounded-xl border p-4 shadow-sm bg-white">
+          <h2 className="font-semibold mb-2">
+            📌 Sản phẩm: {action.product.id}
+          </h2>
 
-    <p className="text-sm text-gray-600">
-      <b>Action:</b> {action.action.label}
-    </p>
+          <p className="text-sm text-gray-600">
+            <b>Action:</b>{' '}
+            {ACTION_LABEL_MAP[action.action.type] ??
+              action.action.label}
+          </p>
 
-    <p className="text-sm text-gray-600 mt-1">
-      <b>Lý do:</b> {action.reason}
-    </p>
+          <p className="text-sm text-gray-600 mt-1">
+            <b>Lý do:</b> {action.reason}
+          </p>
 
-    <button
-      className="mt-4 rounded-lg bg-black px-4 py-2 text-white"
-      onClick={async () => {
-  try {
-    // 1️⃣ Mark DailyAction DONE ngay
-    await fetch(
-  `${process.env.NEXT_PUBLIC_API_URL}/workspaces/workspace-demo/daily-actions/${action.id}/done`,
-  {
-    method: 'PATCH',
-  }
-)
-
-
-    // 2️⃣ Chuyển sang màn Create Video
-    router.push(
-      `/video/create?productId=${action.product.id}` +
-      `&actionType=${action.action.type}` +
-      `&dailyActionId=${action.id}`
-    )
-  } catch (err) {
-    console.error('Failed to mark DailyAction done', err)
-
-    // fallback: vẫn cho đi tiếp
-    router.push(
-      `/video/create?productId=${action.product.id}` +
-      `&actionType=${action.action.type}` +
-      `&dailyActionId=${action.id}`
-    )
-  }
-}}
-    >
-      {action.action.label ?? 'Thực hiện'}
-    </button>
-  </div>
-) : (
-  <div className="mt-6 text-green-600">
-    🎉 Không có việc hôm nay
-  </div>
-)}
-
+          <button
+            className="mt-4 rounded-lg bg-black px-4 py-2 text-white"
+            onClick={() => {
+              router.push(
+                `/video/create?productId=${action.product.id}` +
+                  `&actionType=${action.action.type}` +
+                  `&dailyActionId=${action.id}`
+              )
+            }}
+          >
+            {ACTION_LABEL_MAP[action.action.type] ?? 'Thực hiện'}
+          </button>
+        </div>
+      ) : (
+        <div className="mt-6 text-green-600">
+          🎉 Không có việc hôm nay
+        </div>
+      )}
 
       {/* ======================
           RENDERING VIDEOS

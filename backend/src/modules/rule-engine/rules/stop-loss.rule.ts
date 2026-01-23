@@ -17,12 +17,9 @@ export class StopLossRule implements Rule {
       metrics.totalClicks === 0
     ) {
       return {
-        action: RuleAction.STOP_LOSS,
+        action: RuleAction.STOP_PRODUCT,
         reason: 'Cắt lỗ: quá nhiều video nhưng không mang lại click',
         priority: 0,
-
-        // 🔽 BẮT BUỘC THÊM
-        allowSchedule: false,
         nextProductStatus: 'STOP',
       };
     }

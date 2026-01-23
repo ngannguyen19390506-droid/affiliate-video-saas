@@ -15,6 +15,8 @@ import { VideoOrchestratorService } from './video-orchestrator.service'
 import { RenderFromImageInput } from './dto/render-from-image.input'
 import { RenderVideoOutput } from './dto/render-video.output'
 
+import { RenderStatus } from '@prisma/client' // ✅ THÊM DÒNG NÀY
+
 @Controller('videos')
 export class VideosController {
   constructor(
@@ -76,10 +78,12 @@ export class VideosController {
   async getVideos(
     @Query('renderStatus') renderStatus?: string,
   ) {
+    const where = renderStatus
+      ? { renderStatus: renderStatus as RenderStatus }
+      : undefined
+
     return this.prisma.video.findMany({
-      where: renderStatus
-        ? { renderStatus }
-        : undefined,
+      where,
       orderBy: {
         createdAt: 'desc',
       },
@@ -87,7 +91,7 @@ export class VideosController {
   }
 
   /* =====================================================
-   * ✅ GET /videos/:id
+   * GET /videos/:id
    * Video detail (Video Detail Page)
    * ===================================================== */
   @Get(':id')

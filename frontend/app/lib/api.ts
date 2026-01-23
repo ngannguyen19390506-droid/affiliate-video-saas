@@ -13,7 +13,7 @@ if (!API_BASE_URL) {
 
 /**
  * ======================
- * Daily Actions (EXISTING)
+ * Daily Actions
  * ======================
  */
 export async function fetchDailyActions(
@@ -29,65 +29,80 @@ export async function fetchDailyActions(
 
   const raw = await res.json()
 
-  // ⭐ MAP CHUẨN TẠI ĐÂY
   return raw.map((a: any): DailyAction => ({
     id: a.id,
-    actionType: a.action,          // map từ BE
+    actionType: a.actionType ?? a.action, // ✅ safe mapping
     productId: a.productId,
     productName: a.productName,
     reason: a.reason,
     priority: a.priority,
-    status: a.status ?? 'PENDING', // default
+    status: a.status ?? 'PENDING',
     createdAt: a.createdAt,
   }))
 }
 
 /**
  * ======================
- * Daily Actions (CONTROL)
+ * Daily Action Control
  * ======================
  */
 export async function doneDailyAction(
-  workspaceId: string,
   dailyActionId: string
 ) {
-  const url = `${API_BASE_URL}/workspaces/${workspaceId}/daily-actions/${dailyActionId}/done`
+  const url = `${API_BASE_URL}/daily-actions/${dailyActionId}/done`
 
-  const res = await fetch(url, {
-    method: 'POST',
-  })
+  const res = await fetch(url, { method: 'POST' })
 
   if (!res.ok) {
     throw new Error('Failed to mark daily action as DONE')
   }
+
+  return res.json()
 }
 
 export async function skipDailyAction(
-  workspaceId: string,
   dailyActionId: string
 ) {
-  const url = `${API_BASE_URL}/workspaces/${workspaceId}/daily-actions/${dailyActionId}/skip`
+  const url = `${API_BASE_URL}/daily-actions/${dailyActionId}/skip`
 
-  const res = await fetch(url, {
-    method: 'POST',
-  })
+  const res = await fetch(url, { method: 'POST' })
 
   if (!res.ok) {
     throw new Error('Failed to skip daily action')
   }
+
+  return res.json()
 }
 
 /**
  * ======================
- * Video Projects (DONE)
+ * Video Projects
  * ======================
  */
-export type VideoProject = {
+export type Video = {
   id: string
-  caption?: string
-  renderStatus: string
+  productId: string
+  renderStatus: 'DONE' | 'PROCESSING' | 'FAILED'
+  outputPath: string
 }
 
+export async function fetchVideosDone(): Promise<Video[]> {
+  const url = `${API_BASE_URL}/videos?renderStatus=DONE`
+
+  const res = await fetch(url, { cache: 'no-store' })
+
+  if (!res.ok) {
+    throw new Error('Failed to fetch videos')
+  }
+
+  return res.json()
+}
+
+/**
+ * ======================
+ * Post Schedule
+ * ======================
+ */
 export type PostSchedule = {
   id: string
   videoId: string
@@ -110,24 +125,6 @@ export async function fetchPostSchedules(
   return res.json()
 }
 
-export async function fetchVideoProjectsDone(): Promise<Video[]> {
-  const url = `${API_BASE_URL}/videos?renderStatus=DONE`
-
-  const res = await fetch(url, { cache: 'no-store' })
-
-  if (!res.ok) {
-    throw new Error('Failed to fetch videos')
-  }
-
-  return res.json()
-}
-
-
-/**
- * ======================
- * Post Schedule
- * ======================
- */
 export async function createPostSchedule(input: {
   workspaceId: string
   videoId: string
@@ -135,45 +132,15 @@ export async function createPostSchedule(input: {
   scheduledAt: string
   timezone: string
 }) {
-  const url = `${API_BASE_URL}/post-schedules`
-
-  const res = await fetch(url, {
+  const res = await fetch(`${API_BASE_URL}/post-schedules`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   })
 
   if (!res.ok) {
     throw new Error('Failed to create post schedule')
   }
-}
-
-
-
-export type Video = {
-  id: string
-  productId: string
-  renderStatus: 'DONE' | 'PROCESSING' | 'FAILED'
-  outputPath: string
-}
-
-export async function fetchVideosDone() {
-  const url = `${API_BASE_URL}/videos?renderStatus=DONE`
-
-  console.log('[fetchVideosDone] URL =', url) // 👈 BẮT BUỘC PHẢI CÓ
-
-  const res = await fetch(url, {
-    cache: 'no-store',
-  })
-
-  if (!res.ok) {
-    throw new Error('Failed to fetch videos')
-  }
 
   return res.json()
 }
-
-
-
