@@ -8,18 +8,19 @@ async function bootstrap() {
     await NestFactory.create<NestExpressApplication>(AppModule)
 
   app.enableCors({
-  origin: ['http://localhost:3000'],
-  credentials: true,
-})
-
+    origin: ['http://localhost:3000'], // FE
+    credentials: true,
+  })
 
   // 🔥 SERVE STATIC VIDEO FILES
   app.useStaticAssets(join(process.cwd(), 'outputs'), {
     prefix: '/outputs',
   })
 
-  const PORT = process.env.PORT || 3001
-await app.listen(PORT)
+  const PORT = 3002
+  await app.listen(PORT, '0.0.0.0')
 
+  console.log(`🚀 Backend running at http://localhost:${PORT}`)
 }
+
 bootstrap()

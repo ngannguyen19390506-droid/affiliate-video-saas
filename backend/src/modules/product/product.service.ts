@@ -11,9 +11,8 @@ export class ProductService {
     return this.prisma.product.create({
       data: {
         id: `prod_${Date.now()}`,
-        name: dto.name,
         workspaceId,
-        status: ProductStatus.ACTIVE, // ✅ FIX CHUẨN
+        status: ProductStatus.TEST, // ✅ FIX CHUẨN
       },
     })
   }

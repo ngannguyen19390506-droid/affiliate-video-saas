@@ -1,36 +1,38 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { DailyActionGeneratorService } from './daily-action-generator.service';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 @Injectable()
 export class DailyActionCron {
   private readonly logger = new Logger(DailyActionCron.name);
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly generator: DailyActionGeneratorService,
-  ) {}
+  private readonly prisma: PrismaService,
+  private readonly generator: DailyActionGeneratorService,
+) {
+  this.logger.log('[DAILY_ACTION_CRON] constructor loaded');
+}
+
 
   /**
    * PROD: chạy 1 lần / ngày
-   * ⏰ 03:00 sáng (server time)
-   *
-   * Cron CHỈ gọi generator
-   * Generator chịu trách nhiệm:
-   * - idempotent
-   * - DailyActionRun lifecycle
+   * ⏰ 03:00 sáng (JST)
    */
-  @Cron('0 3 * * *')
+  @Cron('*/1 * * * *') 
   async handleDailyActionGeneration(): Promise<void> {
-    const today = this.getToday(); // YYYY-MM-DD
+    const today = this.getToday();
     this.logger.log(`[DAILY_ACTION_CRON] started - ${today}`);
 
-    // 🔹 Lấy TẤT CẢ workspace (schema hiện tại)
     const workspaces = await this.prisma.workspace.findMany({
-      select: {
-        id: true,
-      },
+      select: { id: true },
     });
 
     for (const ws of workspaces) {
@@ -41,7 +43,6 @@ export class DailyActionCron {
 
         await this.generator.generate(ws.id, today);
       } catch (err) {
-        // ❗ Không throw để workspace khác vẫn chạy
         this.logger.error(
           `[DAILY_ACTION_CRON] failed workspace=${ws.id} date=${today}`,
           err?.stack || err,
@@ -52,11 +53,7 @@ export class DailyActionCron {
     this.logger.log(`[DAILY_ACTION_CRON] finished - ${today}`);
   }
 
-  /**
-   * Hiện tại dùng server date (UTC/JST)
-   * MVP chưa cần timezone per workspace
-   */
   private getToday(): string {
-    return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    return dayjs().tz('Asia/Tokyo').format('YYYY-MM-DD');
   }
 }

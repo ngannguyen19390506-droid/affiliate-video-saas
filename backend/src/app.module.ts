@@ -6,29 +6,24 @@ import { RuleEngineModule } from './modules/rule-engine/rule-engine.module'
 import { DailyActionModule } from './modules/daily-action/daily-action.module'
 import { VisionModule } from './modules/vision/vision.module'
 import { VideoModule } from './modules/video/video.module'
-import { ScheduleModule } from './modules/schedule/schedule.module'
 import { VideoProjectModule } from './modules/video-project/video-project.module'
 
-// ✅ THÊM
+// ✅ ĐỔI TÊN CHO RÕ NGHĨA
+import { ScheduleModule } from './modules/schedule/schedule.module'
+
+// CORE
 import { ProductModule } from './modules/product/product.module'
 
 @Module({
   imports: [
-    NestScheduleModule.forRoot(),
-
+    NestScheduleModule.forRoot(), // ✅ CHỈ Ở ĐÂY
     PrismaModule,
-
-    // ===== CORE BUSINESS =====
-    ProductModule,        // ⭐ BẮT BUỘC (Onboarding, Dashboard guard)
+    ProductModule,
     RuleEngineModule,
     DailyActionModule,
-
-    // ===== VIDEO PIPELINE =====
     VisionModule,
     VideoModule,
     VideoProjectModule,
-
-    // ===== SCHEDULING =====
     ScheduleModule,
   ],
 })
